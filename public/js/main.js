@@ -38,9 +38,14 @@ async function getBestStream() {
 	const base = {
 		deviceId: currentDeviceId ? { exact: currentDeviceId } : undefined,
 		facingMode: currentDeviceId ? undefined : { ideal: 'environment' },
-		advanced: [{ focusMode: 'continuous' }]
+		frameRate: { ideal: 30 },
+		resizeMode: 'none',
+		advanced: [{ focusMode: 'continuous' }, { exposureMode: 'continuous' }, { whiteBalanceMode: 'continuous' }]
 	};
 	const candidates = preferMaxRes ? [
+		{ width: { exact: 4032 }, height: { exact: 3024 } }, // 12MP 4:3 (common phones)
+		{ width: { exact: 4000 }, height: { exact: 3000 } }, // ~12MP generic
+		{ width: { exact: 4096 }, height: { exact: 2160 } }, // 4K DCI
 		{ width: { exact: 3840 }, height: { exact: 2160 } },
 		{ width: { exact: 2560 }, height: { exact: 1440 } },
 		{ width: { exact: 1920 }, height: { exact: 1080 } },
@@ -65,6 +70,19 @@ async function startCamera() {
 		currentStream = stream;
 		videoEl.srcObject = stream;
 		await videoEl.play();
+		// Try bumping to the camera's absolute max after opening
+		const track = currentStream.getVideoTracks()[0];
+		if (track && track.getCapabilities) {
+			const caps = track.getCapabilities();
+			if (caps && caps.width && caps.height) {
+				try {
+					await track.applyConstraints({
+						width: caps.width.max,
+						height: caps.height.max
+					});
+				} catch (_) {}
+			}
+		}
 		showResolution();
 		setupZoomIfAvailable();
 		statusEl && (statusEl.textContent = '');
@@ -112,7 +130,7 @@ function setupZoomIfAvailable() {
 function drawFrameToCanvas(targetCanvas) {
 	const vw = videoEl.videoWidth || 640;
 	const vh = videoEl.videoHeight || 480;
-	const maxW = 2048;
+	const maxW = 3072;
 	const scale = Math.min(maxW / vw, 1.0);
 	const w = Math.round(vw * scale);
 	const h = Math.round(vh * scale);
